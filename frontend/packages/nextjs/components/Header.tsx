@@ -25,6 +25,10 @@ export const menuLinks: HeaderMenuLink[] = [
     href: "/ballots",
   },
   {
+    label: "My Ballots",
+    href: "/my-ballots",
+  },
+  {
     label: "Create Ballot",
     href: "/create-ballot",
   },

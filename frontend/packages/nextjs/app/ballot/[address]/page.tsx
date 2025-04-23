@@ -1,8 +1,8 @@
 "use client";
 
-import React, { use, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useAccount } from "wagmi";
 import { ArrowLeftIcon, UserIcon, UsersIcon } from "@heroicons/react/24/outline";
 import { getBallotDetails } from "~~/services/api/ballotApi";
@@ -29,15 +29,18 @@ type BallotDetails = {
   }[];
 };
 
-export default function BallotDetailsPage({ params }: { params: any }) {
-  const unwrappedParams = use(params);
-  const ballotAddress = (unwrappedParams as { address: string }).address;
+export default function BallotDetailsPage() {
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const ballotAddress =
+    typeof params.address === "string" ? params.address : Array.isArray(params.address) ? params.address[0] : "";
+  const source = searchParams.get("source") || "ballots";
 
-  const router = useRouter();
   const { address: userAddress } = useAccount();
   const [ballot, setBallot] = useState<BallotDetails | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [navigationSource, setNavigationSource] = useState<string>("ballots");
 
   useEffect(() => {
     const fetchBallotDetails = async () => {
@@ -78,9 +81,9 @@ export default function BallotDetailsPage({ params }: { params: any }) {
   return (
     <div className="container mx-auto px-6 py-8">
       <div className="flex items-center mb-8">
-        <Link href="/ballots" className="btn btn-ghost gap-1">
+        <Link href={source === "my-ballots" ? "/my-ballots" : "/ballots"} className="btn btn-ghost gap-1">
           <ArrowLeftIcon className="h-4 w-4" />
-          Back to Ballots
+          {source === "my-ballots" ? "Back to My Ballots" : "Back to Ballots"}
         </Link>
       </div>
 

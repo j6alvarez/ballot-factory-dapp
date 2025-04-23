@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAccount } from "wagmi";
-import { ArrowLeftIcon, ClockIcon, DocumentTextIcon, UserGroupIcon } from "@heroicons/react/24/outline";
-import { getActiveBallots } from "~~/services/api/ballotApi";
+import { ArrowLeftIcon, DocumentTextIcon, UserGroupIcon, UserPlusIcon } from "@heroicons/react/24/outline";
+import { getUserBallots } from "~~/services/api/ballotApi";
 import { notification } from "~~/utils/scaffold-eth";
 
 type Ballot = {
@@ -17,28 +17,53 @@ type Ballot = {
   isActive: boolean;
 };
 
-const BallotsList = () => {
-  const { address: connectedAddress } = useAccount();
+const MyBallotsList = () => {
+  const { address: connectedAddress, isConnected } = useAccount();
   const [ballots, setBallots] = useState<Ballot[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Fetch active ballots when the component mounts
   useEffect(() => {
-    const fetchBallots = async () => {
+    const fetchUserBallots = async () => {
+      if (!connectedAddress) return;
+
       try {
         setIsLoading(true);
-        const activeBallots = await getActiveBallots();
-        setBallots(activeBallots);
+        const userBallots = await getUserBallots(connectedAddress);
+        setBallots(userBallots);
       } catch (error) {
-        console.error("Error fetching ballots:", error);
-        notification.error(error instanceof Error ? error.message : "Failed to fetch ballots");
+        console.error("Error fetching user ballots:", error);
+        notification.error(error instanceof Error ? error.message : "Failed to fetch your ballots");
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchBallots();
-  }, []);
+    if (isConnected) {
+      fetchUserBallots();
+    } else {
+      setIsLoading(false);
+    }
+  }, [connectedAddress, isConnected]);
+
+  if (!isConnected) {
+    return (
+      <div className="container mx-auto px-6 py-8">
+        <div className="flex items-center mb-8">
+          <Link href="/" className="btn btn-ghost gap-1">
+            <ArrowLeftIcon className="h-4 w-4" />
+            Back
+          </Link>
+          <h1 className="text-3xl font-bold ml-4">My Ballots</h1>
+        </div>
+
+        <div className="bg-base-100 shadow-xl rounded-xl p-8 text-center">
+          <UserGroupIcon className="h-12 w-12 mx-auto mb-4 text-base-content/70" />
+          <h2 className="text-2xl font-semibold mb-2">Connect Your Wallet</h2>
+          <p className="mb-6 text-base-content/70">Please connect your wallet to view your ballots.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-6 py-8">
@@ -47,7 +72,7 @@ const BallotsList = () => {
           <ArrowLeftIcon className="h-4 w-4" />
           Back
         </Link>
-        <h1 className="text-3xl font-bold ml-4">Available Ballots</h1>
+        <h1 className="text-3xl font-bold ml-4">My Ballots</h1>
       </div>
 
       {isLoading ? (
@@ -57,8 +82,8 @@ const BallotsList = () => {
       ) : ballots.length === 0 ? (
         <div className="bg-base-100 shadow-xl rounded-xl p-8 text-center">
           <DocumentTextIcon className="h-12 w-12 mx-auto mb-4 text-base-content/70" />
-          <h2 className="text-2xl font-semibold mb-2">No Active Ballots Found</h2>
-          <p className="mb-6 text-base-content/70">There are currently no active ballots available for voting.</p>
+          <h2 className="text-2xl font-semibold mb-2">No Ballots Found</h2>
+          <p className="mb-6 text-base-content/70">You haven't created any ballots yet.</p>
           <Link href="/create-ballot" className="btn btn-primary">
             Create a New Ballot
           </Link>
@@ -77,26 +102,28 @@ const BallotsList = () => {
                     <UserGroupIcon className="h-4 w-4" />
                     <span>{ballot.proposalCount} proposals</span>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-base-content/70">
-                    <ClockIcon className="h-4 w-4" />
-                    <span>Max votes: {ballot.maxVotes}</span>
-                  </div>
                   <div className="flex items-center gap-2">
                     <span className={`badge ${ballot.isActive ? "badge-success" : "badge-error"}`}>
                       {ballot.isActive ? "Open" : "Closed"}
                     </span>
-                    {ballot.allowDelegation && <span className="badge badge-info">Delegation allowed</span>}
+                    {ballot.allowDelegation && (
+                      <div className="flex items-center gap-2 text-sm text-accent">
+                        <span>Delegation allowed</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <Link href={`/ballot/${ballot.address}?source=ballots`} className="btn btn-primary btn-sm">
+                <div className="flex flex-col gap-2">
+                  <Link href={`/ballot/${ballot.address}?source=my-ballots`} className="btn btn-primary btn-sm w-full">
                     View Details
                   </Link>
-                  {connectedAddress && (
-                    <Link href={`/ballot/${ballot.address}/vote`} className="btn btn-outline btn-sm">
-                      Vote
-                    </Link>
-                  )}
+                  <Link
+                    href={`/ballot/${ballot.address}/whitelist`}
+                    className="btn btn-outline btn-sm w-full flex items-center gap-2"
+                  >
+                    <UserPlusIcon className="h-4 w-4" />
+                    Whitelist Voters
+                  </Link>
                 </div>
               </div>
             </div>
@@ -107,4 +134,4 @@ const BallotsList = () => {
   );
 };
 
-export default BallotsList;
+export default MyBallotsList;

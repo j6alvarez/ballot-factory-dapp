@@ -284,6 +284,41 @@ export class BallotsController {
     }
   }
 
+  @ApiOperation({ summary: 'Set voting state for a ballot' })
+  @ApiParam({ name: 'address', description: 'Address of the ballot' })
+  @ApiResponse({
+    status: 200,
+    description: 'Information needed for the frontend to set voting state',
+  })
+  @Post(':address/set-voting-state')
+  async setVotingState(
+    @Param('address') ballotAddress: string,
+    @Body() setVotingStateDto: { isOpen: boolean; ownerAddress: string },
+  ) {
+    try {
+      const { isOpen, ownerAddress } = setVotingStateDto;
+
+      // Return information for the frontend to set voting state
+      return {
+        success: true,
+        ballotAddress,
+        ballotInterface: Ballot.abi,
+        params: {
+          isOpen,
+          ownerAddress,
+        },
+        functionName: 'setVotingState',
+        message: 'Please complete this transaction in your frontend wallet',
+      };
+    } catch (error) {
+      console.error('Error preparing voting state data:', error);
+      throw new HttpException(
+        `Failed to prepare voting state data: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   private formatBallotInfo(ballots: any[]) {
     return ballots.map((ballot) => ({
       address: ballot.ballotAddress,

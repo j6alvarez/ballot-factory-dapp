@@ -2,7 +2,7 @@
 // This file provides functions to interact with the ballot API
 
 // Get the API URL from environment variables with a fallback
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 /**
  * Get ballot creation data from the API
@@ -11,16 +11,16 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001
  */
 export const getBallotCreationData = async (ballotData: any) => {
   const response = await fetch(`${API_URL}/ballots/create`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(ballotData),
   });
 
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.message || 'Failed to get ballot creation data');
+    throw new Error(errorData.message || "Failed to get ballot creation data");
   }
 
   return await response.json();
@@ -34,16 +34,16 @@ export const getBallotCreationData = async (ballotData: any) => {
  */
 export const getWhitelistVotersData = async (ballotAddress: string, whitelistData: any) => {
   const response = await fetch(`${API_URL}/ballots/${ballotAddress}/whitelist`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(whitelistData),
   });
 
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.message || 'Failed to get whitelist voters data');
+    throw new Error(errorData.message || "Failed to get whitelist voters data");
   }
 
   return await response.json();
@@ -55,10 +55,10 @@ export const getWhitelistVotersData = async (ballotAddress: string, whitelistDat
  */
 export const getAllBallots = async () => {
   const response = await fetch(`${API_URL}/ballots`);
-  
+
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.message || 'Failed to get ballots');
+    throw new Error(errorData.message || "Failed to get ballots");
   }
 
   return await response.json();
@@ -70,10 +70,10 @@ export const getAllBallots = async () => {
  */
 export const getActiveBallots = async () => {
   const response = await fetch(`${API_URL}/ballots/active`);
-  
+
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.message || 'Failed to get active ballots');
+    throw new Error(errorData.message || "Failed to get active ballots");
   }
 
   return await response.json();
@@ -86,10 +86,10 @@ export const getActiveBallots = async () => {
  */
 export const getUserBallots = async (address: string) => {
   const response = await fetch(`${API_URL}/ballots/user/${address}`);
-  
+
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.message || 'Failed to get user ballots');
+    throw new Error(errorData.message || "Failed to get user ballots");
   }
 
   return await response.json();
@@ -102,10 +102,34 @@ export const getUserBallots = async (address: string) => {
  */
 export const getBallotDetails = async (index: number) => {
   const response = await fetch(`${API_URL}/ballots/${index}`);
-  
+
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.message || 'Failed to get ballot details');
+    throw new Error(errorData.message || "Failed to get ballot details");
+  }
+
+  return await response.json();
+};
+
+/**
+ * Set voting state for a ballot (open or close)
+ * @param ballotAddress The address of the ballot
+ * @param isOpen Whether voting should be open
+ * @param ownerAddress The owner address
+ * @returns The data needed to set voting state using the wallet
+ */
+export const setVotingStateData = async (ballotAddress: string, isOpen: boolean, ownerAddress: string) => {
+  const response = await fetch(`${API_URL}/ballots/${ballotAddress}/set-voting-state`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ isOpen, ownerAddress }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to get voting state data");
   }
 
   return await response.json();
