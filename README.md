@@ -1,4 +1,4 @@
-# Factory Ballot dApp
+# Ballot Factory dApp
 
 This decentralized application allows users to create and manage ballots on the Ethereum blockchain. The project consists of:
 
@@ -28,7 +28,7 @@ This decentralized application allows users to create and manage ballots on the 
 
 ```bash
 git clone <repository-url>
-cd factory-ballot-dapp
+cd ballot-factory-dapp
 ```
 
 ### Install Dependencies
@@ -78,9 +78,9 @@ This will start a local Ethereum node and deploy your contracts to it.
 In a new terminal:
 
 ```bash
-npx hardhat run scripts/DeployFactoryBallot.ts --network localhost
+npx hardhat run scripts/DeployBallotFactory.ts --network localhost
 # or
-yarn hardhat run scripts/DeployFactoryBallot.ts --network localhost
+yarn hardhat run scripts/DeployBallotFactory.ts --network localhost
 ```
 
 ### 3. Start the NestJS Backend
@@ -165,9 +165,9 @@ export PRIVATE_KEY=your-private-key
 2. Deploy the contracts:
 
 ```bash
-npx hardhat run scripts/DeployFactoryBallot.ts --network sepolia
+npx hardhat run scripts/DeployBallotFactory.ts --network sepolia
 # or
-yarn hardhat run scripts/DeployFactoryBallot.ts --network sepolia
+yarn hardhat run scripts/DeployBallotFactory.ts --network sepolia
 ```
 
 ## Troubleshooting
