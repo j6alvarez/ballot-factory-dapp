@@ -1,41 +1,131 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { ethers } from 'ethers';
-import * as EnhancedBallotFactory from '../contracts/EnhancedBallotFactory.json';
-import * as EnhancedBallot from '../contracts/EnhancedBallot.json';
+import * as BallotFactory from '../contracts/BallotFactory.json';
+import * as Ballot from '../contracts/Ballot.json';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiParam,
+  ApiBody,
+  ApiResponse,
+} from '@nestjs/swagger';
+import { CreateBallotDto } from './dto/create-ballot.dto';
+import { WhitelistVotersDto } from './dto/whitelist-voters.dto';
+import { VoteDto } from './dto/vote.dto';
+import { DelegateVoteDto } from './dto/delegate-vote.dto';
+import { ConfigService } from '@nestjs/config';
 
+@ApiTags('ballots')
 @Controller('ballots')
 export class BallotsController {
-  private provider: ethers.providers.JsonRpcProvider;
+  private provider: ethers.JsonRpcProvider;
   private factoryContract: ethers.Contract;
+  private isInitialized: boolean = false;
 
-  constructor() {
-    // Connect to Ethereum network - update URL for your specific network
-    this.provider = new ethers.providers.JsonRpcProvider(
-      'http://localhost:8545',
-    );
-
-    // Initialize factory contract - update the address after deployment
-    const factoryAddress =
-      process.env.FACTORY_ADDRESS ||
-      '0x0000000000000000000000000000000000000000';
-    this.factoryContract = new ethers.Contract(
-      factoryAddress,
-      EnhancedBallotFactory.abi,
-      this.provider,
-    );
+  constructor(private configService: ConfigService) {
+    this.initializeProvider();
   }
 
-  @Get()
-  async getAllBallots() {
+  private initializeProvider() {
     try {
-      const ballots = await this.factoryContract.getAllBallots();
-      return this.formatBallotInfo(ballots);
+      // Connect to Ethereum network
+      const rpcUrl =
+        this.configService.get('RPC_URL') || 'http://localhost:8545';
+      this.provider = new ethers.JsonRpcProvider(rpcUrl);
+
+      // Initialize factory contract using the address from env
+      const factoryAddress = this.configService.get('FACTORY_ADDRESS');
+
+      if (
+        !factoryAddress ||
+        factoryAddress === '0x0000000000000000000000000000000000000000'
+      ) {
+        console.error('Invalid FACTORY_ADDRESS in environment variables');
+        return;
+      }
+
+      console.log('Factory Address:', factoryAddress);
+      console.log('BallotFactory ABI exists:', !!BallotFactory.abi);
+
+      if (!BallotFactory.abi) {
+        console.error('BallotFactory ABI is missing or invalid');
+        return;
+      }
+
+      this.factoryContract = new ethers.Contract(
+        factoryAddress,
+        BallotFactory.abi,
+        this.provider,
+      );
+
+      this.isInitialized = true;
+      console.log('BallotFactory contract initialized successfully');
     } catch (error) {
-      console.error('Error getting all ballots:', error);
-      throw error;
+      console.error('Error initializing provider:', error);
     }
   }
 
+  @ApiOperation({ summary: 'Get all ballots' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all ballots in the system',
+  })
+  @Get()
+  async getAllBallots() {
+    try {
+      if (!this.isInitialized || !this.factoryContract) {
+        throw new HttpException(
+          'Contract not initialized properly. Check your environment variables and network connection.',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      console.log('Attempting to call getAllBallots() on factory contract...');
+      console.log('Factory contract address:', this.factoryContract.target);
+
+      try {
+        const ballots = await this.factoryContract.getAllBallots();
+        return this.formatBallotInfo(ballots);
+      } catch (contractError) {
+        console.error('Contract call error details:', {
+          message: contractError.message,
+          code: contractError.code,
+          method: 'getAllBallots',
+          args: [],
+          stack: contractError.stack,
+        });
+        throw contractError;
+      }
+    } catch (error) {
+      console.error('Error getting all ballots:', error);
+
+      let errorMessage = 'Unknown error';
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.code) {
+        errorMessage = `Error code: ${error.code}`;
+      }
+
+      throw new HttpException(
+        `Failed to get ballots: ${errorMessage}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @ApiOperation({ summary: 'Get active ballots' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all active ballots',
+  })
   @Get('active')
   async getActiveBallots() {
     try {
@@ -47,6 +137,12 @@ export class BallotsController {
     }
   }
 
+  @ApiOperation({ summary: 'Get ballots by user address' })
+  @ApiParam({ name: 'address', description: 'Ethereum address of the user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns all ballots created by a specific user',
+  })
   @Get('user/:address')
   async getUserBallots(@Param('address') address: string) {
     try {
@@ -58,6 +154,12 @@ export class BallotsController {
     }
   }
 
+  @ApiOperation({ summary: 'Get ballot details by index' })
+  @ApiParam({ name: 'index', description: 'Index of the ballot' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns detailed information about a specific ballot',
+  })
   @Get(':index')
   async getBallotDetails(@Param('index') index: number) {
     try {
@@ -67,17 +169,17 @@ export class BallotsController {
       // Get ballot contract to fetch proposals
       const ballotContract = new ethers.Contract(
         ballot.ballotAddress,
-        EnhancedBallot.abi,
+        Ballot.abi,
         this.provider,
       );
 
       const proposalCount = await ballotContract.getProposalCount();
-      const proposals = [];
+      const proposals: { name: string; voteCount: string }[] = [];
 
       for (let i = 0; i < proposalCount; i++) {
         const proposal = await ballotContract.proposals(i);
         proposals.push({
-          name: ethers.utils.parseBytes32String(proposal.name),
+          name: ethers.decodeBytes32String(proposal.name),
           voteCount: proposal.voteCount.toString(),
         });
       }
@@ -105,17 +207,13 @@ export class BallotsController {
     }
   }
 
+  @ApiOperation({ summary: 'Create a new ballot' })
+  @ApiResponse({
+    status: 201,
+    description: 'Ballot created successfully',
+  })
   @Post('create')
-  async createBallot(
-    @Body()
-    createBallotDto: {
-      proposalNames: string[];
-      description: string;
-      maxVotes: number;
-      allowDelegation: boolean;
-      ownerPrivateKey: string;
-    },
-  ) {
+  async createBallot(@Body() createBallotDto: CreateBallotDto) {
     try {
       const {
         proposalNames,
@@ -127,7 +225,7 @@ export class BallotsController {
 
       // Convert proposal names to bytes32
       const proposalNamesBytes32 = proposalNames.map((name) =>
-        ethers.utils.formatBytes32String(name),
+        ethers.encodeBytes32String(name),
       );
 
       // Get signer from private key
@@ -135,7 +233,9 @@ export class BallotsController {
       const factoryWithSigner = this.factoryContract.connect(wallet);
 
       // Create ballot transaction
-      const tx = await factoryWithSigner.createBallot(
+      const tx = await (
+        factoryWithSigner as ethers.Contract & { createBallot: Function }
+      ).createBallot(
         proposalNamesBytes32,
         description,
         maxVotes,
@@ -145,13 +245,28 @@ export class BallotsController {
       const receipt = await tx.wait();
 
       // Get the ballot address from the event
-      const event = receipt.events.find((e) => e.event === 'BallotCreated');
-      const ballotAddress = event.args.ballotAddress;
+      const event = receipt.logs.find((log) => {
+        try {
+          const parsed = this.factoryContract.interface.parseLog({
+            topics: log.topics,
+            data: log.data,
+          });
+          return parsed?.name === 'BallotCreated';
+        } catch (e) {
+          return false;
+        }
+      });
+
+      const parsedEvent = this.factoryContract.interface.parseLog({
+        topics: event.topics,
+        data: event.data,
+      });
+      const ballotAddress = parsedEvent?.args?.ballotAddress;
 
       return {
         success: true,
         ballotAddress,
-        transactionHash: receipt.transactionHash,
+        transactionHash: receipt.hash,
       };
     } catch (error) {
       console.error('Error creating ballot:', error);
@@ -159,14 +274,16 @@ export class BallotsController {
     }
   }
 
+  @ApiOperation({ summary: 'Whitelist voters for a ballot' })
+  @ApiParam({ name: 'address', description: 'Address of the ballot' })
+  @ApiResponse({
+    status: 200,
+    description: 'Voters whitelisted successfully',
+  })
   @Post(':address/whitelist')
   async whitelistVoters(
     @Param('address') ballotAddress: string,
-    @Body()
-    whitelistDto: {
-      voters: string[];
-      ownerPrivateKey: string;
-    },
+    @Body() whitelistDto: WhitelistVotersDto,
   ) {
     try {
       const { voters, ownerPrivateKey } = whitelistDto;
@@ -177,7 +294,7 @@ export class BallotsController {
       // Connect to the ballot contract
       const ballotContract = new ethers.Contract(
         ballotAddress,
-        EnhancedBallot.abi,
+        Ballot.abi,
         wallet,
       );
 
@@ -187,7 +304,7 @@ export class BallotsController {
 
       return {
         success: true,
-        transactionHash: receipt.transactionHash,
+        transactionHash: receipt.hash,
         votersWhitelisted: voters,
       };
     } catch (error) {
@@ -196,14 +313,16 @@ export class BallotsController {
     }
   }
 
+  @ApiOperation({ summary: 'Cast a vote on a ballot' })
+  @ApiParam({ name: 'address', description: 'Address of the ballot' })
+  @ApiResponse({
+    status: 200,
+    description: 'Vote cast successfully',
+  })
   @Post(':address/vote')
   async castVote(
     @Param('address') ballotAddress: string,
-    @Body()
-    voteDto: {
-      proposalId: number;
-      voterPrivateKey: string;
-    },
+    @Body() voteDto: VoteDto,
   ) {
     try {
       const { proposalId, voterPrivateKey } = voteDto;
@@ -214,7 +333,7 @@ export class BallotsController {
       // Connect to the ballot contract
       const ballotContract = new ethers.Contract(
         ballotAddress,
-        EnhancedBallot.abi,
+        Ballot.abi,
         wallet,
       );
 
@@ -224,7 +343,7 @@ export class BallotsController {
 
       return {
         success: true,
-        transactionHash: receipt.transactionHash,
+        transactionHash: receipt.hash,
         voter: wallet.address,
         proposalId,
       };
@@ -234,14 +353,16 @@ export class BallotsController {
     }
   }
 
+  @ApiOperation({ summary: 'Delegate a vote to another voter' })
+  @ApiParam({ name: 'address', description: 'Address of the ballot' })
+  @ApiResponse({
+    status: 200,
+    description: 'Vote delegated successfully',
+  })
   @Post(':address/delegate')
   async delegateVote(
     @Param('address') ballotAddress: string,
-    @Body()
-    delegateDto: {
-      delegateAddress: string;
-      voterPrivateKey: string;
-    },
+    @Body() delegateDto: DelegateVoteDto,
   ) {
     try {
       const { delegateAddress, voterPrivateKey } = delegateDto;
@@ -252,7 +373,7 @@ export class BallotsController {
       // Connect to the ballot contract
       const ballotContract = new ethers.Contract(
         ballotAddress,
-        EnhancedBallot.abi,
+        Ballot.abi,
         wallet,
       );
 
@@ -262,7 +383,7 @@ export class BallotsController {
 
       return {
         success: true,
-        transactionHash: receipt.transactionHash,
+        transactionHash: receipt.hash,
         from: wallet.address,
         to: delegateAddress,
       };
