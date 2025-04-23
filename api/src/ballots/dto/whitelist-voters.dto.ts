@@ -9,8 +9,8 @@ export class WhitelistVotersDto {
   voters: string[];
 
   @ApiProperty({
-    description: 'Private key of the ballot owner',
+    description: 'Address of the ballot owner',
     example: '0x1234...',
   })
-  ownerPrivateKey: string;
+  ownerAddress: string;
 }

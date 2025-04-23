@@ -19,8 +19,6 @@ import {
 } from '@nestjs/swagger';
 import { CreateBallotDto } from './dto/create-ballot.dto';
 import { WhitelistVotersDto } from './dto/whitelist-voters.dto';
-import { VoteDto } from './dto/vote.dto';
-import { DelegateVoteDto } from './dto/delegate-vote.dto';
 import { ConfigService } from '@nestjs/config';
 
 @ApiTags('ballots')
@@ -210,7 +208,7 @@ export class BallotsController {
   @ApiOperation({ summary: 'Create a new ballot' })
   @ApiResponse({
     status: 201,
-    description: 'Ballot created successfully',
+    description: 'Information needed for the frontend to create a ballot',
   })
   @Post('create')
   async createBallot(@Body() createBallotDto: CreateBallotDto) {
@@ -220,7 +218,7 @@ export class BallotsController {
         description,
         maxVotes,
         allowDelegation,
-        ownerPrivateKey,
+        ownerAddress,
       } = createBallotDto;
 
       // Convert proposal names to bytes32
@@ -228,49 +226,26 @@ export class BallotsController {
         ethers.encodeBytes32String(name),
       );
 
-      // Get signer from private key
-      const wallet = new ethers.Wallet(ownerPrivateKey, this.provider);
-      const factoryWithSigner = this.factoryContract.connect(wallet);
-
-      // Create ballot transaction
-      const tx = await (
-        factoryWithSigner as ethers.Contract & { createBallot: Function }
-      ).createBallot(
-        proposalNamesBytes32,
-        description,
-        maxVotes,
-        allowDelegation,
-      );
-
-      const receipt = await tx.wait();
-
-      // Get the ballot address from the event
-      const event = receipt.logs.find((log) => {
-        try {
-          const parsed = this.factoryContract.interface.parseLog({
-            topics: log.topics,
-            data: log.data,
-          });
-          return parsed?.name === 'BallotCreated';
-        } catch (e) {
-          return false;
-        }
-      });
-
-      const parsedEvent = this.factoryContract.interface.parseLog({
-        topics: event.topics,
-        data: event.data,
-      });
-      const ballotAddress = parsedEvent?.args?.ballotAddress;
-
+      // Return information for the frontend to create the ballot
       return {
         success: true,
-        ballotAddress,
-        transactionHash: receipt.hash,
+        factoryAddress: this.factoryContract.target,
+        factoryInterface: BallotFactory.abi,
+        params: {
+          proposalNames: proposalNamesBytes32,
+          description,
+          maxVotes,
+          allowDelegation,
+          ownerAddress,
+        },
+        message: 'Please complete this transaction in your frontend wallet',
       };
     } catch (error) {
-      console.error('Error creating ballot:', error);
-      throw error;
+      console.error('Error preparing ballot creation data:', error);
+      throw new HttpException(
+        `Failed to prepare ballot creation: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -278,7 +253,7 @@ export class BallotsController {
   @ApiParam({ name: 'address', description: 'Address of the ballot' })
   @ApiResponse({
     status: 200,
-    description: 'Voters whitelisted successfully',
+    description: 'Information needed for the frontend to whitelist voters',
   })
   @Post(':address/whitelist')
   async whitelistVoters(
@@ -286,110 +261,26 @@ export class BallotsController {
     @Body() whitelistDto: WhitelistVotersDto,
   ) {
     try {
-      const { voters, ownerPrivateKey } = whitelistDto;
+      const { voters, ownerAddress } = whitelistDto;
 
-      // Get signer from private key
-      const wallet = new ethers.Wallet(ownerPrivateKey, this.provider);
-
-      // Connect to the ballot contract
-      const ballotContract = new ethers.Contract(
-        ballotAddress,
-        Ballot.abi,
-        wallet,
-      );
-
-      // Whitelist voters
-      const tx = await ballotContract.whitelistVoters(voters);
-      const receipt = await tx.wait();
-
+      // Return information for the frontend to whitelist voters
       return {
         success: true,
-        transactionHash: receipt.hash,
-        votersWhitelisted: voters,
-      };
-    } catch (error) {
-      console.error('Error whitelisting voters:', error);
-      throw error;
-    }
-  }
-
-  @ApiOperation({ summary: 'Cast a vote on a ballot' })
-  @ApiParam({ name: 'address', description: 'Address of the ballot' })
-  @ApiResponse({
-    status: 200,
-    description: 'Vote cast successfully',
-  })
-  @Post(':address/vote')
-  async castVote(
-    @Param('address') ballotAddress: string,
-    @Body() voteDto: VoteDto,
-  ) {
-    try {
-      const { proposalId, voterPrivateKey } = voteDto;
-
-      // Get signer from private key
-      const wallet = new ethers.Wallet(voterPrivateKey, this.provider);
-
-      // Connect to the ballot contract
-      const ballotContract = new ethers.Contract(
         ballotAddress,
-        Ballot.abi,
-        wallet,
-      );
-
-      // Cast vote
-      const tx = await ballotContract.vote(proposalId);
-      const receipt = await tx.wait();
-
-      return {
-        success: true,
-        transactionHash: receipt.hash,
-        voter: wallet.address,
-        proposalId,
+        ballotInterface: Ballot.abi,
+        params: {
+          voters,
+          ownerAddress,
+        },
+        functionName: 'whitelistVoters',
+        message: 'Please complete this transaction in your frontend wallet',
       };
     } catch (error) {
-      console.error('Error casting vote:', error);
-      throw error;
-    }
-  }
-
-  @ApiOperation({ summary: 'Delegate a vote to another voter' })
-  @ApiParam({ name: 'address', description: 'Address of the ballot' })
-  @ApiResponse({
-    status: 200,
-    description: 'Vote delegated successfully',
-  })
-  @Post(':address/delegate')
-  async delegateVote(
-    @Param('address') ballotAddress: string,
-    @Body() delegateDto: DelegateVoteDto,
-  ) {
-    try {
-      const { delegateAddress, voterPrivateKey } = delegateDto;
-
-      // Get signer from private key
-      const wallet = new ethers.Wallet(voterPrivateKey, this.provider);
-
-      // Connect to the ballot contract
-      const ballotContract = new ethers.Contract(
-        ballotAddress,
-        Ballot.abi,
-        wallet,
+      console.error('Error preparing whitelist data:', error);
+      throw new HttpException(
+        `Failed to prepare whitelist data: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
-
-      // Delegate vote
-      const tx = await ballotContract.delegate(delegateAddress);
-      const receipt = await tx.wait();
-
-      return {
-        success: true,
-        transactionHash: receipt.hash,
-        from: wallet.address,
-        to: delegateAddress,
-      };
-    } catch (error) {
-      console.error('Error delegating vote:', error);
-      throw error;
     }
   }
 

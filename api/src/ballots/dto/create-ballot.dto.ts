@@ -27,8 +27,8 @@ export class CreateBallotDto {
   allowDelegation: boolean;
 
   @ApiProperty({
-    description: 'Private key of the ballot creator',
+    description: 'Address of the ballot creator/owner',
     example: '0x1234...',
   })
-  ownerPrivateKey: string;
+  ownerAddress: string;
 }

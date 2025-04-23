@@ -8,8 +8,8 @@ export class DelegateVoteDto {
   delegateAddress: string;
 
   @ApiProperty({
-    description: 'Private key of the voter delegating their vote',
+    description: 'Address of the voter delegating their vote',
     example: '0x1234...',
   })
-  voterPrivateKey: string;
+  voterAddress: string;
 }

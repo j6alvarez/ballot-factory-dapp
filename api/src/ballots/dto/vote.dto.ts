@@ -8,8 +8,8 @@ export class VoteDto {
   proposalId: number;
 
   @ApiProperty({
-    description: 'Private key of the voter',
+    description: 'Address of the voter',
     example: '0x1234...',
   })
-  voterPrivateKey: string;
+  voterAddress: string;
 }

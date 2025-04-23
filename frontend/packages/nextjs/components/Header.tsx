@@ -20,7 +20,14 @@ export const menuLinks: HeaderMenuLink[] = [
     label: "Home",
     href: "/",
   },
-
+  {
+    label: "Ballots",
+    href: "/ballots",
+  },
+  {
+    label: "Create Ballot",
+    href: "/create-ballot",
+  },
   {
     label: "Debug Contracts",
     href: "/debug",
@@ -94,12 +101,14 @@ export const Header = () => {
           )}
         </div>
         <Link href="/" passHref className="hidden lg:flex items-center gap-2 ml-4 mr-6 shrink-0">
-          <div className="flex relative w-10 h-10">
-            <Image alt="SE2 logo" className="cursor-pointer" fill src="/logo.svg" />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-bold leading-tight">Scaffold-ETH</span>
-            <span className="text-xs">Ethereum dev stack</span>
+          <div className="flex relative w-[120px] h-[36px] items-center">
+            <Image
+              alt="Ballot logo"
+              className="cursor-pointer"
+              fill
+              src="/images/ballot.png"
+              style={{ objectFit: "contain" }}
+            />
           </div>
         </Link>
         <ul className="hidden lg:flex lg:flex-nowrap menu menu-horizontal px-1 gap-2">
