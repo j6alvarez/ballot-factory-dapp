@@ -38,7 +38,25 @@ const WhitelistVoters = () => {
     const fetchBallotDetails = async () => {
       try {
         setIsLoading(true);
-        const ballotDetails = await getBallotDetails(0);
+
+        // Step 1: Fetch all ballots to find the correct index
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/ballots`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch ballots");
+        }
+
+        const allBallots = await response.json();
+        // Find the ballot with the matching address from the URL
+        const ballotIndex = allBallots.findIndex(
+          (b: any) => b.address.toLowerCase() === (address as string).toLowerCase(),
+        );
+
+        if (ballotIndex === -1) {
+          throw new Error("Ballot not found");
+        }
+
+        // Step 2: Fetch the correct ballot details using the found index
+        const ballotDetails = await getBallotDetails(ballotIndex);
         setBallot(ballotDetails);
         setVotingOpen(ballotDetails.status.votingOpen);
 
@@ -204,7 +222,25 @@ const WhitelistVoters = () => {
         // Fetch the latest ballot details after a delay
         setTimeout(async () => {
           try {
-            const ballotDetails = await getBallotDetails(0);
+            // Step a: Fetch all ballots to find the correct index again
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/ballots`);
+            if (!response.ok) {
+              throw new Error("Failed to fetch ballots");
+            }
+
+            const allBallots = await response.json();
+            // Find the ballot with the matching address
+            const ballotIndex = allBallots.findIndex(
+              (b: any) => b.address.toLowerCase() === (address as string).toLowerCase(),
+            );
+
+            if (ballotIndex === -1) {
+              throw new Error("Ballot not found");
+            }
+
+            // Step b: Fetch the correct ballot details using the found index
+            const ballotDetails = await getBallotDetails(ballotIndex);
+
             // Update UI if blockchain state differs from our optimistic update
             if (ballotDetails.status.votingOpen !== newVotingState) {
               setVotingOpen(ballotDetails.status.votingOpen);
