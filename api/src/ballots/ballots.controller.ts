@@ -438,16 +438,86 @@ export class BallotsController {
     }
   }
 
-  private formatBallotInfo(ballots: any[]) {
-    return ballots.map((ballot) => ({
-      address: ballot.ballotAddress,
-      description: ballot.description,
-      owner: ballot.owner,
-      maxVotes: ballot.maxVotes.toString(),
-      allowDelegation: ballot.allowDelegation,
-      proposalCount: ballot.proposalCount.toString(),
-      isActive: ballot.isActive,
-    }));
+  private async formatBallotInfo(ballots: any[]) {
+    try {
+      console.log(`Formatting ${ballots.length} ballots with voting status`);
+      // Explicitly type the formattedBallots array to handle the ballot objects
+      const formattedBallots: {
+        address: string;
+        description: string;
+        owner: string;
+        maxVotes: string;
+        allowDelegation: boolean;
+        proposalCount: string;
+        isActive: boolean;
+        votingOpen: boolean;
+      }[] = [];
+
+      for (const ballot of ballots) {
+        try {
+          console.log(
+            `Processing ballot: ${ballot.description} (${ballot.ballotAddress})`,
+          );
+
+          // Create a contract instance for the specific ballot to get its status directly
+          const ballotContract = new ethers.Contract(
+            ballot.ballotAddress,
+            Ballot.abi,
+            this.provider,
+          );
+
+          // Get the voting state directly from the ballot contract
+          const ballotStatus = await ballotContract.getBallotStatus();
+          const votingOpen = ballotStatus[2]; // votingOpen is the 3rd item in the status array
+
+          console.log(
+            `Ballot "${ballot.description}" voting status: ${votingOpen ? 'Open' : 'Closed'}`,
+          );
+
+          formattedBallots.push({
+            address: ballot.ballotAddress,
+            description: ballot.description,
+            owner: ballot.owner,
+            maxVotes: ballot.maxVotes.toString(),
+            allowDelegation: ballot.allowDelegation,
+            proposalCount: ballot.proposalCount.toString(),
+            isActive: ballot.isActive,
+            votingOpen: votingOpen,
+          });
+        } catch (error) {
+          console.error(
+            `Error processing ballot ${ballot.ballotAddress}:`,
+            error,
+          );
+          // Include the ballot without voting status in case of error
+          formattedBallots.push({
+            address: ballot.ballotAddress,
+            description: ballot.description,
+            owner: ballot.owner,
+            maxVotes: ballot.maxVotes.toString(),
+            allowDelegation: ballot.allowDelegation,
+            proposalCount: ballot.proposalCount.toString(),
+            isActive: ballot.isActive,
+            votingOpen: true, // Default to open if we can't determine status
+          });
+        }
+      }
+
+      return formattedBallots;
+    } catch (error) {
+      console.error('Error in formatBallotInfo:', error);
+      // Return original ballot data without voting status
+      return ballots.map((ballot) => ({
+        address: ballot.ballotAddress,
+        description: ballot.description,
+        owner: ballot.owner,
+        maxVotes: ballot.maxVotes.toString(),
+        allowDelegation: ballot.allowDelegation,
+        proposalCount: ballot.proposalCount.toString(),
+        isActive: ballot.isActive,
+        votingOpen: true, // Default to open if we can't determine status
+      }));
+    }
   }
 
   @ApiOperation({ summary: 'Get ballot contract ABI' })

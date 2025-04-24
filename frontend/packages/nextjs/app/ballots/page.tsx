@@ -15,6 +15,7 @@ type Ballot = {
   allowDelegation: boolean;
   proposalCount: string;
   isActive: boolean;
+  votingOpen: boolean;
 };
 
 const BallotsList = () => {
@@ -82,8 +83,8 @@ const BallotsList = () => {
                     <span>Max votes: {ballot.maxVotes}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`badge ${ballot.isActive ? "badge-success" : "badge-error"}`}>
-                      {ballot.isActive ? "Open" : "Closed"}
+                    <span className={`badge ${ballot.votingOpen ? "badge-success" : "badge-error"}`}>
+                      {ballot.votingOpen ? "Open" : "Closed"}
                     </span>
                     {ballot.allowDelegation && <span className="badge badge-info">Delegation allowed</span>}
                   </div>

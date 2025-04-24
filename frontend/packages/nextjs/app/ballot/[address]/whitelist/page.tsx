@@ -113,7 +113,6 @@ const WhitelistVoters = () => {
       console.log(`[Frontend Component] Transaction sent successfully with hash:`, hash);
 
       notification.success(
-        "Transaction Sent!",
         <div className="flex flex-col">
           <span>Voters are being whitelisted.</span>
           <Link href={`/ballot/${address}`} className="underline">
@@ -152,90 +151,84 @@ const WhitelistVoters = () => {
     }
 
     try {
+      // Set button to loading state
       setIsTogglingVotingState(true);
+
+      // Calculate the new voting state (opposite of current)
       const newVotingState = !votingOpen;
+
+      // Update UI optimistically
+      setVotingOpen(newVotingState);
 
       // Call the API to get transaction data for setting voting state
       const txData = await setVotingStateData(address as string, newVotingState, connectedAddress as string);
 
       if (!walletClient) {
+        // Reset UI state if wallet client isn't available
+        setVotingOpen(!newVotingState); // Revert to original state
+        setIsTogglingVotingState(false);
         notification.error("Wallet client not available");
         return;
       }
 
-      // Send transaction
-      const hash = await walletClient.sendTransaction({
-        to: txData.ballotAddress as `0x${string}`,
-        data: txData.data || "0x",
-        value: BigInt(0),
+      // Encode the function call
+      const iface = new ethers.Interface(txData.ballotInterface);
+      const encodedData = iface.encodeFunctionData(txData.functionName, [txData.params.isOpen]);
+
+      console.log("[Frontend Component] Encoded setVotingState data:", {
+        to: txData.ballotAddress,
+        functionName: txData.functionName,
+        isOpen: txData.params.isOpen,
+        encodedData: encodedData.substring(0, 66) + "...",
       });
 
-      notification.success(
-        "Transaction Sent!",
-        <div className="flex flex-col">
-          <span>Waiting for confirmation...</span>
-          <span className="text-xs">Transaction hash: {hash.substring(0, 10)}...</span>
-        </div>,
-      );
+      // Send transaction
+      try {
+        const hash = await walletClient.sendTransaction({
+          to: txData.ballotAddress as `0x${string}`,
+          data: encodedData as `0x${string}`,
+          value: BigInt(0),
+        });
 
-      // Poll for ballot status change instead of immediately updating state
-      let confirmed = false;
-      const startTime = Date.now();
-      const pollingTimeout = 10000; // 10 seconds timeout
+        // Show success notification with transaction info
+        notification.success(
+          <div className="flex flex-col">
+            <span>Ballot voting is now {newVotingState ? "open" : "closed"}.</span>
+            <span className="text-xs mt-1">Transaction: {hash.substring(0, 10)}...</span>
+            <Link href={`/ballot/${address}`} className="underline mt-1">
+              View ballot details
+            </Link>
+          </div>,
+        );
 
-      const pollForConfirmation = async () => {
-        // Poll every second until timeout or confirmation
-        while (Date.now() - startTime < pollingTimeout && !confirmed) {
+        // Fetch the latest ballot details after a delay
+        setTimeout(async () => {
           try {
-            // Fetch the latest ballot details
             const ballotDetails = await getBallotDetails(0);
-            const currentVotingState = ballotDetails.status.votingOpen;
-
-            // Check if voting state matches expected new state
-            if (currentVotingState === newVotingState) {
-              confirmed = true;
-              setVotingOpen(newVotingState);
-
-              notification.success(
-                "Voting State Updated!",
+            // Update UI if blockchain state differs from our optimistic update
+            if (ballotDetails.status.votingOpen !== newVotingState) {
+              setVotingOpen(ballotDetails.status.votingOpen);
+              notification.info(
                 <div className="flex flex-col">
-                  <span>Ballot voting is now {newVotingState ? "open" : "closed"}.</span>
-                  <Link href={`/ballot/${address}`} className="underline">
-                    View ballot details
-                  </Link>
+                  <span>The voting state has been synchronized with the blockchain.</span>
                 </div>,
               );
-
-              break;
             }
-
-            // Wait 1 second before polling again
-            await new Promise(resolve => setTimeout(resolve, 1000));
           } catch (error) {
-            console.error("Error polling for ballot update:", error);
-            // Continue polling even if there's an error
+            console.error("Error refreshing ballot details:", error);
+          } finally {
+            // Always ensure the toggle state is reset
+            setIsTogglingVotingState(false);
           }
-        }
-
-        // After polling timeout, check final status
-        if (!confirmed) {
-          notification.info(
-            "Update Status Unknown",
-            <div className="flex flex-col">
-              <span>The transaction was sent, but we couldn't confirm if the voting state was updated.</span>
-              <span>Please check the ballot details to verify the change.</span>
-              <Link href={`/ballot/${address}`} className="underline">
-                View ballot details
-              </Link>
-            </div>,
-          );
-        }
-
+        }, 5000); // 5 second delay for transaction processing
+      } catch (error) {
+        // Handle wallet rejection/error
+        console.error("Transaction error:", error);
+        // Revert the optimistic update since transaction failed
+        setVotingOpen(!newVotingState);
+        notification.error(error instanceof Error ? error.message : "Transaction was rejected or failed");
         setIsTogglingVotingState(false);
-      };
-
-      // Start polling
-      pollForConfirmation();
+      }
     } catch (error) {
       console.error("Error toggling voting state:", error);
       notification.error(error instanceof Error ? error.message : "Failed to change voting state");

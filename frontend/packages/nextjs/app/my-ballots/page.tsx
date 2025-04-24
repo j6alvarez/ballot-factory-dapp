@@ -15,6 +15,7 @@ type Ballot = {
   allowDelegation: boolean;
   proposalCount: string;
   isActive: boolean;
+  votingOpen: boolean;
 };
 
 const MyBallotsList = () => {
@@ -103,8 +104,8 @@ const MyBallotsList = () => {
                     <span>{ballot.proposalCount} proposals</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`badge ${ballot.isActive ? "badge-success" : "badge-error"}`}>
-                      {ballot.isActive ? "Open" : "Closed"}
+                    <span className={`badge ${ballot.votingOpen ? "badge-success" : "badge-error"}`}>
+                      {ballot.votingOpen ? "Open" : "Closed"}
                     </span>
                     {ballot.allowDelegation && (
                       <div className="flex items-center gap-2 text-sm text-accent">
