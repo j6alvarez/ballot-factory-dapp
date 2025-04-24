@@ -33,6 +33,9 @@ export const getBallotCreationData = async (ballotData: any) => {
  * @returns The data needed to whitelist voters using the wallet
  */
 export const getWhitelistVotersData = async (ballotAddress: string, whitelistData: any) => {
+  console.log(`[Frontend] Sending whitelist request to API for ballot: ${ballotAddress}`);
+  console.log(`[Frontend] Request data:`, JSON.stringify(whitelistData, null, 2));
+
   const response = await fetch(`${API_URL}/ballots/${ballotAddress}/whitelist`, {
     method: "POST",
     headers: {
@@ -41,12 +44,31 @@ export const getWhitelistVotersData = async (ballotAddress: string, whitelistDat
     body: JSON.stringify(whitelistData),
   });
 
+  const statusText = `${response.status} ${response.statusText}`;
+  console.log(`[Frontend] API response status: ${statusText}`);
+
   if (!response.ok) {
     const errorData = await response.json();
+    console.error(`[Frontend] API error:`, errorData);
     throw new Error(errorData.message || "Failed to get whitelist voters data");
   }
 
-  return await response.json();
+  const responseData = await response.json();
+  console.log(
+    `[Frontend] API response data:`,
+    JSON.stringify(
+      {
+        success: responseData.success,
+        ballotAddress: responseData.ballotAddress,
+        functionName: responseData.functionName,
+        votersCount: responseData.params?.voters?.length || 0,
+      },
+      null,
+      2,
+    ),
+  );
+
+  return responseData;
 };
 
 /**
@@ -130,6 +152,47 @@ export const setVotingStateData = async (ballotAddress: string, isOpen: boolean,
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.message || "Failed to get voting state data");
+  }
+
+  return await response.json();
+};
+
+/**
+ * Get vote data for a ballot
+ * @param ballotAddress The address of the ballot
+ * @param proposalIndex The index of the proposal to vote for
+ * @param voterAddress The address of the voter
+ * @returns The data needed to vote using the wallet
+ */
+export const getVoteData = async (ballotAddress: string, proposalIndex: number, voterAddress: string) => {
+  const response = await fetch(`${API_URL}/ballots/${ballotAddress}/vote`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ proposalIndex, voterAddress }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to get vote data");
+  }
+
+  return await response.json();
+};
+
+/**
+ * Check if an address is whitelisted for a ballot
+ * @param ballotAddress The address of the ballot
+ * @param voterAddress The address to check
+ * @returns Whether the address is whitelisted
+ */
+export const checkWhitelistedVoter = async (ballotAddress: string, voterAddress: string) => {
+  const response = await fetch(`${API_URL}/ballots/${ballotAddress}/whitelist/check/${voterAddress}`);
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to check if voter is whitelisted");
   }
 
   return await response.json();

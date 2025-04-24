@@ -122,7 +122,7 @@ const MyBallotsList = () => {
                     className="btn btn-outline btn-sm w-full flex items-center gap-2"
                   >
                     <UserPlusIcon className="h-4 w-4" />
-                    Whitelist Voters
+                    Manage Ballot
                   </Link>
                 </div>
               </div>

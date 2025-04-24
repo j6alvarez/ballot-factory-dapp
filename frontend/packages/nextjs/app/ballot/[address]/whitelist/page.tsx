@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { ethers } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
 import { ArrowLeftIcon, LockClosedIcon, LockOpenIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { getBallotDetails, getWhitelistVotersData, setVotingStateData } from "~~/services/api/ballotApi";
@@ -75,8 +76,11 @@ const WhitelistVoters = () => {
         return;
       }
 
+      console.log(`[Frontend Component] Preparing to whitelist ${addresses.length} voters for ballot: ${address}`);
+
       const whitelistData = {
-        addresses,
+        voters: addresses,
+        ownerAddress: connectedAddress,
       };
 
       const txData = await getWhitelistVotersData(address as string, whitelistData);
@@ -86,11 +90,27 @@ const WhitelistVoters = () => {
         return;
       }
 
+      console.log(`[Frontend Component] Constructing transaction with data from API`);
+
+      // Encode the function call using the ABI and parameters from the API response
+      const iface = new ethers.Interface(txData.ballotInterface);
+      const data = iface.encodeFunctionData(txData.functionName, [txData.params.voters]);
+
+      console.log(`[Frontend Component] Encoded transaction data:`, {
+        to: txData.ballotAddress,
+        functionName: txData.functionName,
+        votersCount: txData.params.voters.length,
+        dataFirstBytes: data.substring(0, 66) + "...", // Log just the beginning of the data
+      });
+
+      console.log(`[Frontend Component] Sending transaction to the blockchain`);
       const hash = await walletClient.sendTransaction({
-        to: txData.to as `0x${string}`,
-        data: txData.data as `0x${string}`,
+        to: txData.ballotAddress as `0x${string}`,
+        data: data as `0x${string}`,
         value: BigInt(0),
       });
+
+      console.log(`[Frontend Component] Transaction sent successfully with hash:`, hash);
 
       notification.success(
         "Transaction Sent!",
@@ -108,7 +128,7 @@ const WhitelistVoters = () => {
         router.push(`/ballot/${address}`);
       }, 3000);
     } catch (error) {
-      console.error("Error whitelisting voters:", error);
+      console.error("[Frontend Component] Error whitelisting voters:", error);
       notification.error(error instanceof Error ? error.message : "Failed to whitelist voters");
     } finally {
       setIsSubmitting(false);
@@ -153,19 +173,72 @@ const WhitelistVoters = () => {
       notification.success(
         "Transaction Sent!",
         <div className="flex flex-col">
-          <span>Ballot voting state is being updated to {newVotingState ? "open" : "closed"}.</span>
-          <Link href={`/ballot/${address}`} className="underline">
-            View ballot details
-          </Link>
+          <span>Waiting for confirmation...</span>
+          <span className="text-xs">Transaction hash: {hash.substring(0, 10)}...</span>
         </div>,
       );
 
-      // Update local state optimistically
-      setVotingOpen(newVotingState);
+      // Poll for ballot status change instead of immediately updating state
+      let confirmed = false;
+      const startTime = Date.now();
+      const pollingTimeout = 10000; // 10 seconds timeout
+
+      const pollForConfirmation = async () => {
+        // Poll every second until timeout or confirmation
+        while (Date.now() - startTime < pollingTimeout && !confirmed) {
+          try {
+            // Fetch the latest ballot details
+            const ballotDetails = await getBallotDetails(0);
+            const currentVotingState = ballotDetails.status.votingOpen;
+
+            // Check if voting state matches expected new state
+            if (currentVotingState === newVotingState) {
+              confirmed = true;
+              setVotingOpen(newVotingState);
+
+              notification.success(
+                "Voting State Updated!",
+                <div className="flex flex-col">
+                  <span>Ballot voting is now {newVotingState ? "open" : "closed"}.</span>
+                  <Link href={`/ballot/${address}`} className="underline">
+                    View ballot details
+                  </Link>
+                </div>,
+              );
+
+              break;
+            }
+
+            // Wait 1 second before polling again
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (error) {
+            console.error("Error polling for ballot update:", error);
+            // Continue polling even if there's an error
+          }
+        }
+
+        // After polling timeout, check final status
+        if (!confirmed) {
+          notification.info(
+            "Update Status Unknown",
+            <div className="flex flex-col">
+              <span>The transaction was sent, but we couldn't confirm if the voting state was updated.</span>
+              <span>Please check the ballot details to verify the change.</span>
+              <Link href={`/ballot/${address}`} className="underline">
+                View ballot details
+              </Link>
+            </div>,
+          );
+        }
+
+        setIsTogglingVotingState(false);
+      };
+
+      // Start polling
+      pollForConfirmation();
     } catch (error) {
       console.error("Error toggling voting state:", error);
       notification.error(error instanceof Error ? error.message : "Failed to change voting state");
-    } finally {
       setIsTogglingVotingState(false);
     }
   };

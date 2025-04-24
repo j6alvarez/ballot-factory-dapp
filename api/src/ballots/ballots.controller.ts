@@ -261,10 +261,15 @@ export class BallotsController {
     @Body() whitelistDto: WhitelistVotersDto,
   ) {
     try {
+      console.log(
+        `[API] Whitelist request received for ballot: ${ballotAddress}`,
+      );
+      console.log(`[API] Request data:`, JSON.stringify(whitelistDto, null, 2));
+
       const { voters, ownerAddress } = whitelistDto;
 
       // Return information for the frontend to whitelist voters
-      return {
+      const response = {
         success: true,
         ballotAddress,
         ballotInterface: Ballot.abi,
@@ -275,8 +280,25 @@ export class BallotsController {
         functionName: 'whitelistVoters',
         message: 'Please complete this transaction in your frontend wallet',
       };
+
+      console.log(
+        `[API] Sending whitelist response:`,
+        JSON.stringify(
+          {
+            success: response.success,
+            ballotAddress: response.ballotAddress,
+            functionName: response.functionName,
+            voters: response.params.voters.length,
+            ownerAddress: response.params.ownerAddress,
+          },
+          null,
+          2,
+        ),
+      );
+
+      return response;
     } catch (error) {
-      console.error('Error preparing whitelist data:', error);
+      console.error('[API] Error preparing whitelist data:', error);
       throw new HttpException(
         `Failed to prepare whitelist data: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -296,10 +318,18 @@ export class BallotsController {
     @Body() setVotingStateDto: { isOpen: boolean; ownerAddress: string },
   ) {
     try {
+      console.log(
+        `[API] Set voting state request received for ballot: ${ballotAddress}`,
+      );
+      console.log(
+        `[API] Request data:`,
+        JSON.stringify(setVotingStateDto, null, 2),
+      );
+
       const { isOpen, ownerAddress } = setVotingStateDto;
 
       // Return information for the frontend to set voting state
-      return {
+      const response = {
         success: true,
         ballotAddress,
         ballotInterface: Ballot.abi,
@@ -310,10 +340,99 @@ export class BallotsController {
         functionName: 'setVotingState',
         message: 'Please complete this transaction in your frontend wallet',
       };
+
+      console.log(
+        `[API] Sending set voting state response:`,
+        JSON.stringify(
+          {
+            success: response.success,
+            ballotAddress: response.ballotAddress,
+            functionName: response.functionName,
+            isOpen: response.params.isOpen,
+            ownerAddress: response.params.ownerAddress,
+          },
+          null,
+          2,
+        ),
+      );
+
+      return response;
     } catch (error) {
-      console.error('Error preparing voting state data:', error);
+      console.error('[API] Error preparing voting state data:', error);
       throw new HttpException(
         `Failed to prepare voting state data: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @ApiOperation({ summary: 'Check if voter is whitelisted and vote status' })
+  @ApiParam({ name: 'address', description: 'Address of the ballot' })
+  @ApiParam({ name: 'voter', description: 'Address of the voter' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Information about whether the voter is whitelisted and has voted',
+  })
+  @Get(':address/whitelist/check/:voter')
+  async checkWhitelistedVoter(
+    @Param('address') ballotAddress: string,
+    @Param('voter') voterAddress: string,
+  ) {
+    try {
+      // Get ballot contract to check whitelist status
+      const ballotContract = new ethers.Contract(
+        ballotAddress,
+        Ballot.abi,
+        this.provider,
+      );
+
+      // Use the voters mapping getter instead of direct function calls
+      const voterInfo = await ballotContract.voters(voterAddress);
+
+      return {
+        success: true,
+        isWhitelisted: voterInfo.isWhitelisted,
+        hasVoted: voterInfo.hasVoted,
+      };
+    } catch (error) {
+      console.error('Error checking whitelist status:', error);
+      throw new HttpException(
+        `Failed to check whitelist status: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @ApiOperation({ summary: 'Get data for casting a vote' })
+  @ApiParam({ name: 'address', description: 'Address of the ballot' })
+  @ApiResponse({
+    status: 200,
+    description: 'Information needed for the frontend to cast a vote',
+  })
+  @Post(':address/vote')
+  async vote(
+    @Param('address') ballotAddress: string,
+    @Body() voteDto: { proposalIndex: number; voterAddress: string },
+  ) {
+    try {
+      const { proposalIndex, voterAddress } = voteDto;
+
+      // Return information for the frontend to cast a vote
+      return {
+        success: true,
+        ballotAddress,
+        ballotInterface: Ballot.abi,
+        params: {
+          proposalIndex,
+        },
+        functionName: 'vote',
+        message: 'Please complete this transaction in your frontend wallet',
+      };
+    } catch (error) {
+      console.error('Error preparing vote data:', error);
+      throw new HttpException(
+        `Failed to prepare vote data: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
@@ -329,5 +448,28 @@ export class BallotsController {
       proposalCount: ballot.proposalCount.toString(),
       isActive: ballot.isActive,
     }));
+  }
+
+  @ApiOperation({ summary: 'Get ballot contract ABI' })
+  @ApiParam({ name: 'address', description: 'Address of the ballot' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns the ABI for the ballot contract',
+  })
+  @Get(':address/abi')
+  async getBallotABI(@Param('address') ballotAddress: string) {
+    try {
+      return {
+        success: true,
+        ballotAddress,
+        ballotAbi: Ballot.abi,
+      };
+    } catch (error) {
+      console.error('Error providing ballot ABI:', error);
+      throw new HttpException(
+        `Failed to provide ballot ABI: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }
